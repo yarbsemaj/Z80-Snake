@@ -1,0 +1,466 @@
+0001   0000             CR              .EQU     0DH
+0002   0000             LF              .EQU     0AH
+0003   0000             
+0004   0000             SER_BUFSIZE     .EQU     3FH
+0005   0000             SER_FULLSIZE    .EQU     30H
+0006   0000             SER_EMPTYSIZE   .EQU     5
+0007   0000             
+0008   0000             RTS_HIGH        .EQU     0D6H
+0009   0000             RTS_LOW         .EQU     096H
+0010   0000             
+0011   0000             serBuf          .EQU     $8000
+0012   0000             serInPtr        .EQU     serBuf+SER_BUFSIZE
+0013   0000             serRdPtr        .EQU     serInPtr+2
+0014   0000             serBufUsed      .EQU     serRdPtr+2
+0015   0000             snakeStackX		.EQU     $8100 ; Start of snake X pos stack
+0016   0000             snakeStackY		.EQU     $8200 ; Start of snake X pos stack
+0017   0000             snakeDir		.EQU     $8300 ; Last Char input
+0018   0000             snakeL			.EQU     $8301 ; Len of snake
+0019   0000             
+0020   0000             snakeStackXPOS	.EQU     $8302 ; The adress of the location of the head of the snake
+0021   0000             snakeStackYPOS	.EQU     $8304 ; The adress of the location of the head of the snake
+0022   0000             
+0023   0000             snakeYIPos		.EQU     $8306 ; Poss of the y snake iterator
+0024   0000             snakeXIPos		.EQU     $8308 ; Poss of the x snake iterator
+0025   0000             
+0026   0000             appleXPos		.EQU     $830A 
+0027   0000             appleYPos		.EQU     $830B
+0028   0000             
+0029   0000             score			.EQU	 $830C
+0030   0000             speed			.EQU	 $830E
+0031   0000             
+0032   0000             seed			.EQU	 $8400
+0033   0000             
+0034   9000                             .ORG $9000
+0035   9000             				
+0036   9000             Setup:
+0037   9000 3E 00       				LD		A, $0
+0038   9002 32 0C 83    				LD		(score), 	A
+0039   9005 3E 06       				LD		A, $06
+0040   9007 32 00 81    				LD		(snakeStackX), 	A
+0041   900A 32 00 82    				LD		(snakeStackY), 	A
+0042   900D 21 00 81    				LD		HL,	snakeStackX
+0043   9010 22 02 83    				LD		(snakeStackXPOS), HL
+0044   9013 21 00 82    				LD		HL,	snakeStackY
+0045   9016 22 04 83    				LD		(snakeStackYPOS), HL
+0046   9019 3E 05       				LD		A, $05
+0047   901B 32 01 83    				LD		(snakeL), 	A
+0048   901E 3E 44       				LD		A, 'D'
+0049   9020 32 00 83    				LD		(snakeDir), 	A
+0050   9023 3E 7F       				LD		A, $7F
+0051   9025 32 0E 83    				LD		(speed), 	A		;Initial delay
+0052   9028 CD 8D 90    				CALL	placeApple
+0053   902B             				
+0054   902B 21 9B 92    				LD		HL, cls		;Clear screen
+0055   902E CD 79 92    				CALL	print
+0056   9031             				
+0057   9031 CD 75 90    				CALL	drawBoard
+0058   9034             				
+0059   9034             GameLoop:
+0060   9034 CD DC 90    				CALL	input
+0061   9037 CD FB 90    				CALL	moveSnake
+0062   903A CD BA 90    				CALL	appleColide
+0063   903D CD 80 91    				CALL	snakeColide
+0064   9040             				
+0065   9040 CD BB 91    				CALL	drawSnake
+0066   9043 CD 9E 90    				CALL	drawApple
+0067   9046 CD 54 90    				CALL	drawScore
+0068   9049 3A 0E 83    				LD		A, (speed)
+0069   904C 47          				LD		B ,A
+0070   904D 0E FF       				LD 		C,$FF   ;delay
+0071   904F CD 84 92    				CALL 	DELAY
+0072   9052 18 E0       				JR		GameLoop
+0073   9054             				
+0074   9054             ;-------------- HUD --------------------------
+0075   9054             drawScore:
+0076   9054             								
+0077   9054 21 00 00    				LD		HL, $00
+0078   9057 E5          				PUSH	HL
+0079   9058 21 13 00    				LD		HL, $13
+0080   905B E5          				PUSH	HL
+0081   905C CD 37 92    				CALL	moveCursor
+0082   905F 21 26 93    				LD		HL, scoreHUD
+0083   9062 CD 79 92    				CALL 	print
+0084   9065 3A 0C 83    				LD		A, (score)
+0085   9068 6F          				LD		L,A
+0086   9069 26 00       				LD		H,$00
+0087   906B CD 4E 92    				CALL	HLToDec
+0088   906E 3E 0A       				LD		A,LF
+0089   9070 CF          				RST     08H
+0090   9071 3E 0D       				LD		A,CR
+0091   9073 CF          				RST     08H
+0092   9074 C9          				RET
+0093   9075             				
+0094   9075 21 B6 92    drawBoard:		LD		HL, gameBoardTop	;Print board top
+0095   9078 CD 79 92    				CALL	print
+0096   907B 3E 10       				LD		A,	$10
+0097   907D             drawBoradMain:	
+0098   907D 21 DE 92    				LD		HL, gameBoard
+0099   9080 CD 79 92    				CALL	print
+0100   9083 3D          				DEC		A
+0101   9084 20 F7       				JR		NZ,drawBoradMain
+0102   9086 21 03 93    				LD		HL, gameBottom		;Print board bottom
+0103   9089 CD 79 92    				CALL	print
+0104   908C C9          				RET
+0105   908D             
+0106   908D             ;-------------- Apple --------------------------		
+0107   908D             placeApple:
+0108   908D CD 8B 92    				CALL	randomA
+0109   9090 E6 1F       				AND     %00011111       ; TRUNCATE
+0110   9092 32 0A 83    				LD		(appleXPos), A
+0111   9095 CD 8B 92    				CALL	randomA
+0112   9098 E6 0F       				AND     %00001111       ; TRUNCATE
+0113   909A 32 0B 83    				LD		(appleYPos), A
+0114   909D C9          				RET
+0115   909E             drawApple:
+0116   909E 3A 0A 83    				LD		A, (appleXPos)
+0117   90A1 C6 02       				ADD		A,$2						;Make space for the border
+0118   90A3 6F          				LD		L, A						
+0119   90A4 26 00       				LD		H, $00
+0120   90A6 E5          				PUSH	HL
+0121   90A7 3A 0B 83    				LD		A, (appleYPos)
+0122   90AA C6 02       				ADD		A,$2						;Make space for the border
+0123   90AC 6F          				LD		L, A	
+0124   90AD 26 00       				LD		H, $00
+0125   90AF E5          				PUSH	HL
+0126   90B0 CD 37 92    				CALL	moveCursor
+0127   90B3 21 A0 92    				LD		HL, apple
+0128   90B6 CD 79 92    				CALL 	print
+0129   90B9 C9          				RET
+0130   90BA             appleColide:
+0131   90BA 2A 02 83    				LD		HL,(snakeStackXPOS)
+0132   90BD 46          				LD		B, (HL)
+0133   90BE 3A 0A 83    				LD		A, (appleXPos)
+0134   90C1 B8          				CP		B
+0135   90C2 C0          				RET		NZ
+0136   90C3 2A 04 83    				LD		HL,(snakeStackYPOS)
+0137   90C6 46          				LD		B, (HL)
+0138   90C7 3A 0B 83    				LD		A, (appleYPos)
+0139   90CA B8          				CP		B
+0140   90CB C0          				RET		NZ
+0141   90CC             ;Apple Caught
+0142   90CC CD 8D 90    				CALL	placeApple
+0143   90CF 21 01 83    				LD		HL,	snakeL
+0144   90D2 34          				INC		(HL)
+0145   90D3 21 0C 83    				LD		HL,	score
+0146   90D6 34          				INC		(HL)
+0147   90D7 21 0E 83    				LD		HL, speed
+0148   90DA 35          				DEC		(HL)
+0149   90DB C9          				RET
+0150   90DC             
+0151   90DC             ;-------------- Input --------------------------					
+0152   90DC             input:
+0153   90DC CD 09 92    				CALL 	RXAA
+0154   90DF C8          				RET		Z
+0155   90E0 E6 DF       				AND     %11011111       ; lower to uppercase
+0156   90E2 FE 57       				CP		'W'
+0157   90E4 CA F7 90    				JP		Z,validInput
+0158   90E7 FE 41       				CP		'A'
+0159   90E9 CA F7 90    				JP		Z,validInput
+0160   90EC FE 53       				CP		'S'
+0161   90EE CA F7 90    				JP		Z,validInput
+0162   90F1 FE 44       				CP		'D'
+0163   90F3 CA F7 90    				JP		Z,validInput
+0164   90F6 C9          				RET
+0165   90F7             validInput:		
+0166   90F7 32 00 83    				LD		(snakeDir), A
+0167   90FA C9          				RET
+0168   90FB             
+0169   90FB             ;-------------- Snake --------------------------				
+0170   90FB             moveSnake:
+0171   90FB 3A 00 83    				LD		A,(snakeDir)
+0172   90FE FE 57       				CP		'W'
+0173   9100 CA 10 91    				JP		Z,moveU
+0174   9103 FE 41       				CP		'A'
+0175   9105 CA 3A 91    				JP		Z,moveL
+0176   9108 FE 53       				CP		'S'
+0177   910A CA 25 91    				JP		Z,moveD
+0178   910D C3 4F 91    				JP		moveR
+0179   9110             
+0180   9110             moveU:			
+0181   9110 2A 04 83    				LD		HL, (snakeStackYPOS)
+0182   9113 7E          				LD		A,(HL)
+0183   9114 3D          				DEC		A
+0184   9115 47          				LD		B, A
+0185   9116 E6 F0       				AND		%11110000
+0186   9118 C2 78 91    				JP		NZ,wallHit
+0187   911B 78          				LD		A, B
+0188   911C 2C          				INC		L
+0189   911D 77          				LD		(HL), A
+0190   911E 22 04 83    				LD		(snakeStackYPOS),HL
+0191   9121 CD 64 91    				CALL	copyX
+0192   9124 C9          				RET
+0193   9125             moveD:			
+0194   9125 2A 04 83    				LD		HL, (snakeStackYPOS)
+0195   9128 7E          				LD		A,(HL)
+0196   9129 3C          				INC		A
+0197   912A 47          				LD		B, A
+0198   912B E6 F0       				AND		%11110000
+0199   912D C2 78 91    				JP		NZ,wallHit
+0200   9130 78          				LD		A, B
+0201   9131 2C          				INC		L
+0202   9132 77          				LD		(HL), A
+0203   9133 22 04 83    				LD		(snakeStackYPOS),HL
+0204   9136 CD 64 91    				CALL	copyX
+0205   9139 C9          				RET
+0206   913A             moveL:			
+0207   913A 2A 02 83    				LD		HL, (snakeStackXPOS)
+0208   913D 7E          				LD		A,(HL)
+0209   913E 3D          				DEC		A
+0210   913F 47          				LD		B, A
+0211   9140 E6 E0       				AND		%11100000
+0212   9142 C2 78 91    				JP		NZ,wallHit
+0213   9145 78          				LD		A, B
+0214   9146 2C          				INC		L
+0215   9147 77          				LD		(HL), A
+0216   9148 22 02 83    				LD		(snakeStackXPOS),HL
+0217   914B CD 6E 91    				CALL	copyY
+0218   914E C9          				RET
+0219   914F             moveR:			
+0220   914F 2A 02 83    				LD		HL, (snakeStackXPOS)
+0221   9152 7E          				LD		A,(HL)
+0222   9153 3C          				INC		A
+0223   9154 47          				LD		B, A
+0224   9155 E6 E0       				AND		%11100000
+0225   9157 C2 78 91    				JP		NZ,wallHit
+0226   915A 78          				LD		A, B
+0227   915B 2C          				INC		L
+0228   915C 77          				LD		(HL), A
+0229   915D 22 02 83    				LD		(snakeStackXPOS),HL
+0230   9160 CD 6E 91    				CALL	copyY
+0231   9163 C9          				RET
+0232   9164             				
+0233   9164             copyX:
+0234   9164 2A 02 83    				LD		HL, (snakeStackXPOS)
+0235   9167 7E          				LD		A,(HL)
+0236   9168 2C          				INC		L
+0237   9169 77          				LD		(HL), A
+0238   916A 22 02 83    				LD		(snakeStackXPOS),HL
+0239   916D C9          				RET
+0240   916E             
+0241   916E             copyY:
+0242   916E 2A 04 83    				LD		HL, (snakeStackYPOS)
+0243   9171 7E          				LD		A,(HL)
+0244   9172 2C          				INC		L
+0245   9173 77          				LD		(HL), A
+0246   9174 22 04 83    				LD		(snakeStackYPOS),HL
+0247   9177 C9          				RET
+0248   9178             				
+0249   9178             ;------- Snake death -------;
+0250   9178             wallHit:
+0251   9178 21 AB 92    				LD		HL, gameOver		;Game over
+0252   917B CD 79 92    				CALL	print
+0253   917E D1          				POP		DE
+0254   917F C9          				RET
+0255   9180             
+0256   9180             snakeColide:
+0257   9180 3A 01 83    				LD		A, 	(snakeL)				;Load up B, used to calulate snake len
+0258   9183 47          				LD		B,	A
+0259   9184 2A 02 83    				LD		HL, (snakeStackXPOS)		; Setup the x iterators
+0260   9187 22 08 83    				LD      (snakeXIPos), HL 
+0261   918A 2A 04 83    				LD		HL, (snakeStackYPOS)		; Setup the y iterators
+0262   918D 22 06 83    				LD      (snakeYIPos), HL
+0263   9190             snakeColideLoop:
+0264   9190 21 08 83    				LD		HL, snakeXIPos				;Move I pointer back 1
+0265   9193 35          				DEC		(HL)
+0266   9194 21 06 83    				LD		HL, snakeYIPos				;Move I pointer back 1
+0267   9197 35          				DEC		(HL)
+0268   9198 05          				DEC		B							;Are we at the end of the sanke
+0269   9199 78          				LD		A, B
+0270   919A C8          				RET 	Z
+0271   919B             				;Compare
+0272   919B 2A 08 83    				LD		HL,(snakeXIPos)				;If the head of the snake in the stack = current itteration position
+0273   919E 7E          				LD		A, (HL)
+0274   919F 2A 02 83    				LD		HL,(snakeStackXPOS)
+0275   91A2 4E          				LD		C, (HL)
+0276   91A3 B9          				CP		C
+0277   91A4 C2 90 91    				JP		NZ, snakeColideLoop
+0278   91A7 2A 06 83    				LD		HL,(snakeYIPos)
+0279   91AA 7E          				LD		A, (HL)
+0280   91AB 2A 04 83    				LD		HL, (snakeStackYPOS)
+0281   91AE 4E          				LD		C, (HL)
+0282   91AF B9          				CP		C
+0283   91B0 C2 90 91    				JP		NZ, snakeColideLoop
+0284   91B3             ;Snake Caught
+0285   91B3 21 AB 92    				LD		HL, gameOver		;Game over
+0286   91B6 CD 79 92    				CALL	print
+0287   91B9 D1          				POP		DE
+0288   91BA C9          				RET
+0289   91BB             				
+0290   91BB             drawSnake:
+0291   91BB 3A 01 83    				LD		A, 	(snakeL)				;Load up B, used to calulate snake len
+0292   91BE 47          				LD		B,	A
+0293   91BF 2A 02 83    				LD		HL, (snakeStackXPOS)		; Setup the x iterators
+0294   91C2 22 08 83    				LD      (snakeXIPos), HL 
+0295   91C5 2A 04 83    				LD		HL, (snakeStackYPOS)		; Setup the y iterators
+0296   91C8 22 06 83    				LD      (snakeYIPos), HL 
+0297   91CB 2A 08 83    drawSnakeLoop:	LD		HL, (snakeXIPos)			;Load iterator
+0298   91CE 6E          				LD 		L, (HL)
+0299   91CF 2C          				INC		L							;Make space for the border
+0300   91D0 2C          				INC		L							;Make space for the border
+0301   91D1 26 00       				LD		H, $00
+0302   91D3 E5          				PUSH	HL
+0303   91D4 2A 06 83    				LD 		HL, (snakeYIPos)
+0304   91D7 6E          				LD 		L, (HL)
+0305   91D8 2C          				INC		L							;Make space for the border
+0306   91D9 2C          				INC		L							;Make space for the border
+0307   91DA 26 00       				LD		H, $00
+0308   91DC E5          				PUSH	HL
+0309   91DD CD 37 92    				CALL	moveCursor
+0310   91E0 3E 23       				LD		A,'#'
+0311   91E2 CF          				RST     08H
+0312   91E3 21 08 83    				LD		HL, snakeXIPos
+0313   91E6 35          				DEC		(HL)
+0314   91E7 21 06 83    				LD		HL, snakeYIPos
+0315   91EA 35          				DEC		(HL)
+0316   91EB 05          				DEC		B
+0317   91EC 78          				LD		A, B
+0318   91ED C2 CB 91    				JP		NZ,drawSnakeLoop		; Overide last snake pos
+0319   91F0 2A 08 83    				LD		HL, (snakeXIPos)
+0320   91F3 6E          				LD 		L, (HL)
+0321   91F4 2C          				INC		L							;Make space for the border
+0322   91F5 2C          				INC		L							;Make space for the border
+0323   91F6 26 00       				LD		H, $00
+0324   91F8 E5          				PUSH	HL
+0325   91F9 2A 06 83    				LD 		HL, (snakeYIPos)
+0326   91FC 6E          				LD 		L, (HL)
+0327   91FD 2C          				INC		L							;Make space for the border
+0328   91FE 2C          				INC		L							;Make space for the border
+0329   91FF 26 00       				LD		H, $00
+0330   9201 E5          				PUSH	HL
+0331   9202 CD 37 92    				CALL	moveCursor
+0332   9205 3E 20       				LD		A,' '
+0333   9207 CF          				RST     08H
+0334   9208 C9          				RET
+0335   9209             				
+0336   9209             ;--------------LIBS ---------------------				
+0337   9209             RXAA:
+0338   9209 3A 43 80    				LD       A,(serBufUsed)
+0339   920C FE 00                       CP       $00
+0340   920E 28 24                       JR       Z, rtNoChar
+0341   9210 E5                          PUSH     HL
+0342   9211 2A 41 80                    LD       HL,(serRdPtr)
+0343   9214 23                          INC      HL
+0344   9215 7D                          LD       A,L             ; Only need to check low byte becasuse buffer<256 bytes
+0345   9216 FE 3F                       CP       (serBuf+SER_BUFSIZE) & $FF
+0346   9218 20 03                       JR       NZ, notRdWrap
+0347   921A 21 00 80                    LD       HL,serBuf
+0348   921D F3          notRdWrap:      DI
+0349   921E 22 41 80                    LD       (serRdPtr),HL
+0350   9221 3A 43 80                    LD       A,(serBufUsed)
+0351   9224 3D                          DEC      A
+0352   9225 32 43 80                    LD       (serBufUsed),A
+0353   9228 FE 05                       CP       SER_EMPTYSIZE
+0354   922A 30 04                       JR       NC,rts1
+0355   922C 3E 96                       LD       A,RTS_LOW
+0356   922E D3 80                       OUT      ($80),A
+0357   9230             rts1:
+0358   9230 7E                          LD       A,(HL)
+0359   9231 FB                          EI
+0360   9232 E1                          POP      HL
+0361   9233 C9                          RET                      ; Char ready in A
+0362   9234             rtNoChar:
+0363   9234 3E 00       				LD       A,$00
+0364   9236 C9                          RET                      ; 00H ready in A
+0365   9237             				
+0366   9237             				
+0367   9237             moveCursor:		
+0368   9237 D1          				POP		DE
+0369   9238 3E 1B       				LD		A,$1B
+0370   923A CF          				RST     08H
+0371   923B 3E 5B       				LD		A,'['
+0372   923D CF          				RST     08H
+0373   923E E1          				POP		HL
+0374   923F CD 4E 92    				CALL	HLToDec
+0375   9242 3E 3B       				LD		A,$3B
+0376   9244 CF          				RST     08H
+0377   9245 E1          				POP		HL
+0378   9246 CD 4E 92    				CALL	HLToDec
+0379   9249 3E 66       				LD		A,'f'
+0380   924B CF          				RST     08H
+0381   924C D5          				PUSH	DE
+0382   924D C9          				RET
+0383   924E             				
+0384   924E             HLToDec:
+0385   924E F5          				PUSH	AF
+0386   924F C5          				PUSH	BC
+0387   9250 CD 56 92    				CALL	DispHL
+0388   9253 C1          				POP		BC
+0389   9254 F1          				POP		AF
+0390   9255 C9          				RET
+0391   9256             ;Number in hl to decimal ASCII
+0392   9256             ;Thanks to z80 Bits
+0393   9256             ;inputs:	hl = number to ASCII
+0394   9256             ;example: hl=300 outputs '00300'
+0395   9256             ;destroys: af, bc, hl, used
+0396   9256             DispHL:
+0397   9256 01 F0 D8    				ld		bc,-10000
+0398   9259 CD 6F 92    				call	Num1
+0399   925C 01 18 FC    				ld		bc,-1000
+0400   925F CD 6F 92    				call	Num1
+0401   9262 01 9C FF    				ld		bc,-100
+0402   9265 CD 6F 92    				call	Num1
+0403   9268 0E F6       				ld		c,-10
+0404   926A CD 6F 92    				call	Num1
+0405   926D 0E FF       				ld		c,-1
+0406   926F 3E 2F       Num1:			ld		a,'0'-1
+0407   9271 3C          Num2:			inc		a
+0408   9272 09          				add		hl,bc
+0409   9273 38 FC       				jr		c,Num2
+0410   9275 ED 42       				sbc		hl,bc
+0411   9277 CF          				RST     08H
+0412   9278 C9          				ret
+0413   9279             
+0414   9279 F5          print:			PUSH 	AF				; Preserve AF				
+0415   927A 7E          printLoop:      LD      A,(HL)          ; Get character
+0416   927B B7                          OR      A               ; Is it $00 ?
+0417   927C 28 04                       JR     	Z,printRet      ; Then RETurn on terminator
+0418   927E CF                          RST     08H             ; Print it
+0419   927F 23                          INC     HL              ; Next Character
+0420   9280 18 F8                       JR      printLoop       ; Continue until $00
+0421   9282             printRet:		
+0422   9282 F1          				POP		AF
+0423   9283 C9          				RET
+0424   9284             DELAY:
+0425   9284 00          				NOP
+0426   9285 0B          				DEC 	BC
+0427   9286 78          				LD 		A,B
+0428   9287 B1          				OR 		C
+0429   9288 C8          				RET 	Z
+0430   9289 18 F9       				JR 		DELAY
+0431   928B             randomA:				
+0432   928B 3A 00 84    				ld a, 	(seed)
+0433   928E 47          				ld b, 	a 
+0434   928F             
+0435   928F 0F          				rrca ; multiply by 32
+0436   9290 0F          				rrca
+0437   9291 0F          				rrca
+0438   9292 EE 1F       				xor $1f
+0439   9294             
+0440   9294 80          				add 	a, b
+0441   9295 DE FF       				sbc a, 255 ; carry
+0442   9297             
+0443   9297 32 00 84    				ld (seed), a
+0444   929A C9          				ret
+0445   929B             				
+0446   929B 1B5B324A00  cls:      	  .BYTE 1BH,"[2J",0
+0447   92A0 1B5B33316D40apple:        .BYTE 1BH,"[31m@",1BH,"[0m",0
+0447   92A6 1B5B306D00
+0448   92AB 47616D65206FgameOver:     .BYTE "Game over!",0
+0448   92B1 7665722100
+0449   92B6 1B5B48232D2DgameBoardTop: .BYTE 1BH,"[H","#------------*Sna"
+0449   92BC 2D2D2D2D2D2D2D2D2D2D2A536E61
+0450   92CA 6B65212A2D2D			  .BYTE "ke!*------------#",CR,LF,0
+0450   92D0 2D2D2D2D2D2D2D2D2D2D230D0A00
+0451   92DE 7C2020202020gameBoard: 	  .BYTE "|               "
+0451   92E4 20202020202020202020
+0452   92EE 202020202020			  .BYTE "                 |",CR,LF,0
+0452   92F4 20202020202020202020207C0D0A00
+0453   9303 232D2D2D2D2DgameBottom:   .BYTE "#-----------------"
+0453   9309 2D2D2D2D2D2D2D2D2D2D2D2D
+0454   9315 2D2D2D2D2D2D			  .BYTE "---------------#",0
+0454   931B 2D2D2D2D2D2D2D2D2D2300
+0455   9326 53636F72653AscoreHUD:     .BYTE "Score: ",0
+0455   932C 2000
+0456   932E             .END
+tasm: Number of errors = 0
