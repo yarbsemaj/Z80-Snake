@@ -1,17 +1,6 @@
 CR              .EQU     0DH
 LF              .EQU     0AH
 
-SER_BUFSIZE     .EQU     3FH
-SER_FULLSIZE    .EQU     30H
-SER_EMPTYSIZE   .EQU     5
-
-RTS_HIGH        .EQU     0D6H
-RTS_LOW         .EQU     096H
-
-serBuf          .EQU     $8000
-serInPtr        .EQU     serBuf+SER_BUFSIZE
-serRdPtr        .EQU     serInPtr+2
-serBufUsed      .EQU     serRdPtr+2
 snakeStackX		.EQU     $8100 ; Start of snake X pos stack
 snakeStackY		.EQU     $8200 ; Start of snake X pos stack
 snakeDir		.EQU     $8300 ; Last Char input
@@ -34,9 +23,9 @@ seed			.EQU	 $8400
                 .ORG $9000
 				
 Setup:
-				LD		A, $0
+				LD		A, $0					;Initial Score
 				LD		(score), 	A
-				LD		A, $06
+				LD		A, $06					;Initial snake pos
 				LD		(snakeStackX), 	A
 				LD		(snakeStackY), 	A
 				LD		HL,	snakeStackX
@@ -44,14 +33,16 @@ Setup:
 				LD		HL,	snakeStackY
 				LD		(snakeStackYPOS), HL
 				LD		A, $05
-				LD		(snakeL), 	A
-				LD		A, 'D'
+				LD		(snakeL), 	A			;initial snake lenght
+				LD		A, 'D'					;initial direction
 				LD		(snakeDir), 	A
 				LD		A, $7F
 				LD		(speed), 	A		;Initial delay
 				CALL	placeApple
 				
-				LD		HL, cls		;Clear screen
+				LD		HL, cls			;Clear screen
+				CALL	print
+				LD		HL, hideCursor	;Hide Cursor
 				CALL	print
 				
 				CALL	drawBoard
@@ -106,10 +97,10 @@ drawBoradMain:
 ;-------------- Apple --------------------------		
 placeApple:
 				CALL	randomA
-				AND     %00011111       ; TRUNCATE
+				AND     00011111b       ; TRUNCATE
 				LD		(appleXPos), A
 				CALL	randomA
-				AND     %00001111       ; TRUNCATE
+				AND     00001111b       ; TRUNCATE
 				LD		(appleYPos), A
 				RET
 drawApple:
@@ -150,9 +141,10 @@ appleColide:
 
 ;-------------- Input --------------------------					
 input:
-				CALL 	RXAA
+				RST		18H
 				RET		Z
-				AND     %11011111       ; lower to uppercase
+				RST		10H
+				AND     11011111b       ; lower to uppercase
 				CP		'W'
 				JP		Z,validInput
 				CP		'A'
@@ -182,7 +174,7 @@ moveU:
 				LD		A,(HL)
 				DEC		A
 				LD		B, A
-				AND		%11110000
+				AND		11110000b
 				JP		NZ,wallHit
 				LD		A, B
 				INC		L
@@ -195,7 +187,7 @@ moveD:
 				LD		A,(HL)
 				INC		A
 				LD		B, A
-				AND		%11110000
+				AND		11110000b
 				JP		NZ,wallHit
 				LD		A, B
 				INC		L
@@ -208,7 +200,7 @@ moveL:
 				LD		A,(HL)
 				DEC		A
 				LD		B, A
-				AND		%11100000
+				AND		11100000b
 				JP		NZ,wallHit
 				LD		A, B
 				INC		L
@@ -221,7 +213,7 @@ moveR:
 				LD		A,(HL)
 				INC		A
 				LD		B, A
-				AND		%11100000
+				AND		11100000b
 				JP		NZ,wallHit
 				LD		A, B
 				INC		L
@@ -249,6 +241,8 @@ copyY:
 ;------- Snake death -------;
 wallHit:
 				LD		HL, gameOver		;Game over
+				CALL	print
+				LD		HL, showCursor		;Show cursor
 				CALL	print
 				POP		DE
 				RET
@@ -283,6 +277,8 @@ snakeColideLoop:
 				JP		NZ, snakeColideLoop
 ;Snake Caught
 				LD		HL, gameOver		;Game over
+				CALL	print
+				LD		HL, showCursor		;Show cursor
 				CALL	print
 				POP		DE
 				RET
@@ -333,37 +329,7 @@ drawSnakeLoop:	LD		HL, (snakeXIPos)			;Load iterator
 				RST     08H
 				RET
 				
-;--------------LIBS ---------------------				
-RXAA:
-				LD       A,(serBufUsed)
-                CP       $00
-                JR       Z, rtNoChar
-                PUSH     HL
-                LD       HL,(serRdPtr)
-                INC      HL
-                LD       A,L             ; Only need to check low byte becasuse buffer<256 bytes
-                CP       (serBuf+SER_BUFSIZE) & $FF
-                JR       NZ, notRdWrap
-                LD       HL,serBuf
-notRdWrap:      DI
-                LD       (serRdPtr),HL
-                LD       A,(serBufUsed)
-                DEC      A
-                LD       (serBufUsed),A
-                CP       SER_EMPTYSIZE
-                JR       NC,rts1
-                LD       A,RTS_LOW
-                OUT      ($80),A
-rts1:
-                LD       A,(HL)
-                EI
-                POP      HL
-                RET                      ; Char ready in A
-rtNoChar:
-				LD       A,$00
-                RET                      ; 00H ready in A
-				
-				
+;--------------LIBS ---------------------							
 moveCursor:		
 				POP		DE
 				LD		A,$1B
@@ -453,4 +419,6 @@ gameBoard: 	  .BYTE "|               "
 gameBottom:   .BYTE "#-----------------"
 			  .BYTE "---------------#",0
 scoreHUD:     .BYTE "Score: ",0
+hideCursor:	  .BYTE	1BH,"[?25l",0
+showCursor:	  .BYTE	1BH,"[?25h",0
 .END
